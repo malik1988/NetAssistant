@@ -313,7 +313,7 @@
       <item>
        <layout class="QHBoxLayout" name="horizontalLayout_7">
         <item>
-         <widget class="QTextEdit" name="textEdit_2">
+         <widget class="QTextEdit" name="textEdit_send">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Expanding" vsizetype="Ignored">
             <horstretch>0</horstretch>
@@ -356,6 +356,22 @@
  <resources/>
  <connections>
   <connection>
+   <sender>pushButton_connect</sender>
+   <signal>pressed()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>slot_connect()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>134</x>
+     <y>205</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>129</x>
+     <y>575</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
    <sender>comboBox_protocol</sender>
    <signal>currentIndexChanged(QString)</signal>
    <receiver>MainWindow</receiver>
@@ -372,18 +388,18 @@
    </hints>
   </connection>
   <connection>
-   <sender>pushButton_connect</sender>
+   <sender>pushButton_11</sender>
    <signal>pressed()</signal>
    <receiver>MainWindow</receiver>
-   <slot>slot_connect()</slot>
+   <slot>slot_send()</slot>
    <hints>
     <hint type="sourcelabel">
-     <x>134</x>
-     <y>205</y>
+     <x>748</x>
+     <y>513</y>
     </hint>
     <hint type="destinationlabel">
-     <x>129</x>
-     <y>575</y>
+     <x>721</x>
+     <y>577</y>
     </hint>
    </hints>
   </connection>
@@ -391,5 +407,7 @@
  <slots>
   <slot>slot_proto_change()</slot>
   <slot>slot_connect()</slot>
+  <slot>slot_local_addr_change()</slot>
+  <slot>slot_send()</slot>
  </slots>
 </ui>
