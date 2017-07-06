@@ -111,14 +111,14 @@
        </widget>
       </item>
       <item>
-       <widget class="QCheckBox" name="checkBox_3">
+       <widget class="QCheckBox" name="checkBox_timeview">
         <property name="text">
          <string>显示接收时间</string>
         </property>
        </widget>
       </item>
       <item>
-       <widget class="QCheckBox" name="checkBox_4">
+       <widget class="QCheckBox" name="checkBox_hexview">
         <property name="text">
          <string>十六进制显示</string>
         </property>
@@ -283,7 +283,7 @@
          </widget>
         </item>
         <item>
-         <widget class="QComboBox" name="comboBox_target_2">
+         <widget class="QComboBox" name="comboBox_host">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
             <horstretch>0</horstretch>
@@ -403,11 +403,79 @@
     </hint>
    </hints>
   </connection>
+  <connection>
+   <sender>checkBox_hexview</sender>
+   <signal>stateChanged(int)</signal>
+   <receiver>MainWindow</receiver>
+   <slot>slot_hex_view_change(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>53</x>
+     <y>296</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>111</x>
+     <y>328</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>checkBox_timeview</sender>
+   <signal>stateChanged(int)</signal>
+   <receiver>MainWindow</receiver>
+   <slot>slot_time_view_change(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>90</x>
+     <y>274</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>4</x>
+     <y>283</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton</sender>
+   <signal>pressed()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>slot_clear_view()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>179</x>
+     <y>356</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>184</x>
+     <y>379</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_2</sender>
+   <signal>pressed()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>slot_save_view()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>80</x>
+     <y>351</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>118</x>
+     <y>373</y>
+    </hint>
+   </hints>
+  </connection>
  </connections>
  <slots>
   <slot>slot_proto_change()</slot>
   <slot>slot_connect()</slot>
   <slot>slot_local_addr_change()</slot>
   <slot>slot_send()</slot>
+  <slot>slot_hex_view_change(int)</slot>
+  <slot>slot_time_view_change(int)</slot>
+  <slot>slot_clear_view()</slot>
+  <slot>slot_save_view()</slot>
  </slots>
 </ui>
