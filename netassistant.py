@@ -1,5 +1,5 @@
 #coding: utf-8
-from PyQt5.QtWidgets import QMessageBox, QComboBox
+from PyQt5.QtWidgets import QMessageBox, QComboBox, QFileDialog
 from PyQt5 import QtCore
 from PyQt5 import uic
 import os
@@ -24,6 +24,8 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
     time_view = False  # 显示接收时间标志
     net = None  # 当前网络连接 NetHelper类型
 
+    client_list = []  # 记录所有连接的TCP 客户端
+
     def __init__(self):
         ui_mainwindow.__init__(self)
         qtbaseclass.__init__(self)
@@ -32,9 +34,14 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
         self.comboBox_local.addItems(['127.0.0.1', '0.0.0.0'])
 
     def data_recevie(self):
+        '''数据接收（TCP Client/UDP）'''
         if self.net:
             while self.net.bytesAvailable() > 0:
-                data = self.net.readAll()  # Qbytearray类型
+                data, host = self.net.readAll()  # Qbytearray类型
+                if host:
+                    ip = host[0].toString()
+                    port = host[1]
+                    host = '[From %s:%s] ' % (ip, port)
                 if self.hex_view:
                     # 转换成十六进制数
                     data = data.toHex()
@@ -48,23 +55,22 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
 
                     if self.hex_view:
                         s = s.upper()
-
+                    if host:
+                        s = host + s
                     self.textBrowser.append(s)
                 except Exception as e:
                     QMessageBox.critical(self, '错误', '数据编码有误！可尝试十六进制显示。')
 
     def slot_proto_change(self, proto):
         '''协议类型更改'''
-
-        if proto == 'TCP Client':
-            self.label_local.setText(u'(2)本地主机地址')
-            self.label_target.setText(u'(3)远程主机地址')
-        elif proto == 'TCP Server':
-            self.label_local.setText(u'(2)本地主机地址')
-            self.label_target.setText(u'(3)本地主机端口')
+        if proto == 'TCP Server':
+            self.label_host.setText(u'客户端：')
+            self.comboBox_host.addItem(u'所有连接')
+            self.pushButton_host.setText(u'断开连接')
         else:
-            self.label_local.setText(u'(2)本地主机地址')
-            self.label_target.setText(u'(3)本地主机端口')
+            self.label_host.setText(u'远程主机：')
+            self.comboBox_host.clear()
+            self.pushButton_host.setText(u'清除主机')
 
     def slot_connect(self):
         '''打开（连接）按钮按下'''
@@ -86,49 +92,30 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
 
         self.comboBox_protocol.setEnabled(next_state)
         self.comboBox_local.setEnabled(next_state)
-        self.comboBox_target.setEnabled(next_state)
+        self.comboBox_port.setEnabled(next_state)
 
     def sock_connect(self):
         '''连接打开'''
         self.proto = self.comboBox_protocol.currentText()
-        if self.proto == 'TCP Client':
-            try:
-                #远程地址： ip:port
-                addr = self.comboBox_target.currentText()
-                if ':' in addr:
-                    ip, port = addr.split(':')
-                    # address = (ip, int(port))
-                    port = int(port)
+        ip = self.comboBox_local.currentText()
+        port = self.comboBox_port.currentText()
 
+        try:
+            port = int(port)
+            if self.proto == 'TCP Client':
                 self.net = NetHelper(sock_type='TCP Client', ip=ip, port=port)
-
-                #添加成功连接的记录，方便下次直接下拉
-                self.comboBox_target.addItem(addr)
-            except Exception as e:
-                self.sock = None
-                QMessageBox.critical(self, '错误', '地址:%r ，连接失败！' % addr)
-        elif self.proto == 'UDP':
-            # UDP
-            ip = self.comboBox_local.currentText()
-            port = self.comboBox_target.currentText()
-            try:
-                port = int(port)
+            elif self.proto == 'UDP':
                 self.net = NetHelper(sock_type='UDP', ip=ip, port=port)
-            except Exception as e:
+            elif self.proto == 'TCP Server':
+                self.net = NetHelper(sock_type='TCP Server', ip=ip, port=port)
+                # 绑定客户端连接消息
+                self.net.sock.newConnection.connect(
+                    self.tcpServer_onConnection)
+            else:
                 pass
-                self.net = None
-        elif self.proto=='TCP Server':
-            ip = self.comboBox_local.currentText()
-            port = self.comboBox_target.currentText()
-            try:
-                port=int(port)
-                self.net=NetHelper(sock_type='TCP Server',ip=ip,port=port)
-            except Exception as e:
-                pass
-                self.net = None
-            
-        else:
-            pass
+        except:  # Exception as e:
+            self.sock = None
+            QMessageBox.critical(self, '错误', '地址:%s，端口:%s ，连接失败！' % (ip, port))
 
         if self.net:
             # 绑定接收
@@ -140,6 +127,17 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
         '''连接关闭'''
         if self.net:
             try:
+                if self.proto == 'TCP Server':
+                    # 断开所有客户端，并清除client_list
+                    l = self.client_list.copy()
+                    try:
+                        for c in l:
+                            # 调用会触发 disconnect，其中包含删除self.client_list中数据
+                            c.close()
+                    except:
+                        pass
+                    self.client_list.clear()
+
                 self.net.close()
                 self.net = None
             except Exception as e:
@@ -165,13 +163,31 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
                     b = bytes(text, encoding='utf-8')
                     if self.proto == 'UDP':
                         host = self.comboBox_host.currentText()
+                        if not host:
+                            raise Exception(
+                                "请输入远程主机地址和端口，例如: 127.0.0.1:2007 。")
                         ip_host, port_host = host.split(':')
                         port_host = int(port_host)
                         self.net.send(b, ip_host=ip_host, port_host=port_host)
+                    elif self.proto == 'TCP Server':
+                        host = self.comboBox_host.currentText()
+                        match_client = True  # 只发送给一个客户端
+                        if host == u'所有连接':
+                            match_client = False
+                        else:
+                            ip_host, port_host = host.split(':')
+                            port_host = int(port_host)
+                        for client in self.client_list:
+                            if match_client and client.peerAddress().toString(
+                            ) == ip_host and client.peerPort() == port_host:
+                                # 找到对应的client
+                                client.write(b)
+                            elif not match_client:
+                                client.write(b)
                     else:
                         self.net.send(b)
                 except Exception as e:
-                    print(e)
+                    QMessageBox.critical(self, '错误', '%s' % e)
             else:
                 QMessageBox.critical(self, '错误', '数据为空！')
         else:
@@ -187,29 +203,114 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
 
     def slot_clear_view(self):
         '''清除显示'''
-        self.textBrowser.clear()
+        if self.textBrowser.toPlainText():
+            self.textBrowser.clear()
 
     def slot_save_view(self):
         '''保存显示'''
-        pass
+        if not self.textBrowser.toPlainText():
+            # 没有数据直接退出
+            return
 
+        file_name, state = QFileDialog.getSaveFileName(self, '保存文件', './',
+                                                       'Text文件(*.txt)')
+        if state:
+            with open(file_name, 'w') as f:
+                f.write(self.textBrowser.toPlainText())
+            QMessageBox.information(self, '成功', '%s文件保存成功! ' % file_name)
+
+    def tcpServer_onConnection(self):
+        '''TCP Server有客户端连接进来'''
+        client = self.net.sock.nextPendingConnection()
+        client.readyRead.connect(self.tcpServer_dataRecvie)
+        # 客户端退出绑定clientExit
+        client.disconnected.connect(self.tcpServer_clientExit)
+        client.error.connect(self.tcpServer_clientExit)
+
+        self.client_list.append(client)
+
+        ip = client.peerAddress().toString()
+        port = client.peerPort()
+        client_info = '%s:%s' % (ip, port)
+        self.comboBox_host.addItem(client_info)
+
+    def tcpServer_clientExit(self):
+        '''TCP Server下客户端退出（正常断开/异常退出）'''
+        client = self.sender()
+        try:
+            client.close()
+            self.client_list.remove(client)
+        except:
+            pass
+
+        ip = client.peerAddress().toString()
+        port = client.peerPort()
+        client_info = '%s:%s' % (ip, port)
+        self._comboBox_removeItem_byName(self.comboBox_host, client_info)
+
+    def _comboBox_removeItem_byName(self, combo, name):
+        '''QComboBox中删除特定名字的项目'''
+        for i in range(0, combo.count()):
+            if name == combo.itemText(i):
+                # 找到对应的项目
+                combo.removeItem(i)
+
+    def tcpServer_dataRecvie(self):
+        '''TCP Server数据处理'''
+        if self.net:
+            for client in self.client_list:
+                if client.bytesAvailable() > 0:
+                    ip = client.peerAddress().toString()
+                    port = client.peerPort()
+                    client_info = '[From %s:%s] ' % (ip, port)
+
+                    data = client.readAll()
+                    if self.hex_view:
+                        # 转换成十六进制数
+                        data = data.toHex()
+                    data = bytearray(data)  # 转成python的bytes类型，方便处理
+                    try:
+                        s = data.decode('gbk')
+                        if self.time_view:
+                            # 显示接收时间
+                            now = datetime.now()
+                            s = '[%s] ' % now.strftime(
+                                '%Y-%m-%d %H:%M:%S,%f') + s
+
+                        if self.hex_view:
+                            s = s.upper()
+
+                        self.textBrowser.append(client_info + s)
+                    except Exception as e:
+                        QMessageBox.critical(self, '错误', '数据编码有误！可尝试十六进制显示。')
+
+    def slot_hex_send_change(self, state):
+        '''十六进制发送'''
+        self.hex_send = True if state else False
+
+    def slot_host_clear(self):
+        '''清除主机/断开客户端'''
+
+        if self.client_list:
+            #断开客户端
+            clients = self.client_list.copy()
+            host = self.comboBox_host.currentText()
+            ip, port = host.split(':')
+            for c in clients:
+                if c.peerAddress().toString() == ip and int(
+                        port) == c.peerPort:
+                    c.close()
+        else:
+            self.comboBox_host.clear()
 
 class NetHelper(object):
     '''TCP/UDP 统一接口类'''
 
-    socket_tcp_client = QTcpSocket()
-    socket_tcp_server = QTcpServer()
-    socket_udp = QUdpSocket()
+    sock = None  # 记录当前连接的sock
+    sock_type = None  # 记录当前连接的sock类型
 
-    sock = None
-    sock_type = None
-    ip = None
-    port = None
-
-    list_clients=list()
-
-    # ip_host = None  # UDP 使用，远程IP地址
-    # port_host = None  # UDP使用，远程端口
+    # ip = None # 记录当前连接的IP地址
+    port = None  # 记录当前连接的端口号
 
     def __init__(self, **kwargs):
         self.open(**kwargs)
@@ -220,25 +321,24 @@ class NetHelper(object):
             'TCP Client','TCP Server','UDP'
         '''
         self.sock_type = sock_type
-        self.ip = ip
+        # self.ip = ip
         self.port = port
 
         if sock_type == 'TCP Client':
-            self.socket_tcp_client.connectToHost(ip, port)
-            self.sock = self.socket_tcp_client
+            tcp_client = QTcpSocket()
+            tcp_client.connectToHost(ip, port)
+            self.sock = tcp_client
         elif sock_type == 'TCP Server':
-            self.socket_tcp_server.listen(QHostAddress(ip), port)
-            self.socket_tcp_server.newConnection.connect(self.listen)
-            self.sock = self.socket_tcp_server
-            
+            tcp_server = QTcpServer()
+            tcp_server.listen(QHostAddress(ip), port)
+            self.sock = tcp_server
+
         elif sock_type == 'UDP':
-            self.socket_udp.bind(QHostAddress(self.ip), self.port)
-            self.sock = self.socket_udp
+            udp = QUdpSocket()
+            udp.bind(QHostAddress(ip), port)
+            self.sock = udp
         else:
             print('Unkonw sock_type=%r' % sock_type)
-
-    def listen(self):
-        self.list_clients.append(self.sock.nextPendingConnection())
 
     def close(self):
         '''关闭网络设备，断开连接'''
@@ -258,14 +358,19 @@ class NetHelper(object):
             pass
 
     def readAll(self):
+        '''读取所有数据
+        @return:
+            tuple(data,[from])
+        '''
         if self.sock_type == 'TCP Client':
-            return self.sock.readAll()
+            data = self.sock.redAll()
+            return (data, None)
         elif self.sock_type == 'TCP Server':
             pass
         elif self.sock_type == 'UDP':
             data, host, port = self.sock.readDatagram(self.port)
             data = QtCore.QByteArray(data)
-            return data
+            return (data, [host, port])
         else:
             pass
 
@@ -277,8 +382,7 @@ class NetHelper(object):
             return self.sock.writeDatagram(data,
                                            QHostAddress(ip_host), port_host)
         elif self.sock_type == 'TCP Server':
-            for client in self.list_clients:
-                print(client)
+            pass
         else:
             pass
 
@@ -291,10 +395,3 @@ class NetHelper(object):
             return self.sock.readyRead.connect(func)
         else:
             pass
-
-
-if __name__ == '__main__':
-    net = NetHelper(sock_type='UDP', ip='127.0.0.1', port=2007)
-    s = 'test'
-    data = bytes(s, encoding='utf-8')
-    net.send(data)

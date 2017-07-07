@@ -38,6 +38,14 @@
           <verstretch>0</verstretch>
          </sizepolicy>
         </property>
+        <property name="font">
+         <font>
+          <family>Arial</family>
+          <pointsize>12</pointsize>
+          <weight>50</weight>
+          <bold>false</bold>
+         </font>
+        </property>
         <property name="editable">
          <bool>false</bool>
         </property>
@@ -58,6 +66,12 @@
       </item>
       <item>
        <widget class="QComboBox" name="comboBox_local">
+        <property name="font">
+         <font>
+          <family>Arial</family>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
         <property name="editable">
          <bool>true</bool>
         </property>
@@ -77,7 +91,13 @@
        </widget>
       </item>
       <item>
-       <widget class="QComboBox" name="comboBox_target">
+       <widget class="QComboBox" name="comboBox_port">
+        <property name="font">
+         <font>
+          <family>Arial</family>
+          <pointsize>12</pointsize>
+         </font>
+        </property>
         <property name="editable">
          <bool>true</bool>
         </property>
@@ -265,12 +285,12 @@
        </widget>
       </item>
       <item>
-       <layout class="QHBoxLayout" name="horizontalLayout_udphost">
+       <layout class="QHBoxLayout" name="horizontalLayout_host">
         <property name="sizeConstraint">
          <enum>QLayout::SetDefaultConstraint</enum>
         </property>
         <item>
-         <widget class="QLabel" name="label_6">
+         <widget class="QLabel" name="label_host">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
             <horstretch>0</horstretch>
@@ -296,7 +316,7 @@
          </widget>
         </item>
         <item>
-         <widget class="QPushButton" name="pushButton_7">
+         <widget class="QPushButton" name="pushButton_host">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
             <horstretch>0</horstretch>
@@ -467,6 +487,38 @@
     </hint>
    </hints>
   </connection>
+  <connection>
+   <sender>pushButton_host</sender>
+   <signal>pressed()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>slot_host_clear()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>752</x>
+     <y>447</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>785</x>
+     <y>463</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>checkBox_9</sender>
+   <signal>stateChanged(int)</signal>
+   <receiver>MainWindow</receiver>
+   <slot>slot_hex_send_change(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>103</x>
+     <y>460</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>171</x>
+     <y>429</y>
+    </hint>
+   </hints>
+  </connection>
  </connections>
  <slots>
   <slot>slot_proto_change()</slot>
@@ -477,5 +529,7 @@
   <slot>slot_time_view_change(int)</slot>
   <slot>slot_clear_view()</slot>
   <slot>slot_save_view()</slot>
+  <slot>slot_host_clear()</slot>
+  <slot>slot_hex_send_change(int)</slot>
  </slots>
 </ui>
