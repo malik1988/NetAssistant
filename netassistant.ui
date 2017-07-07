@@ -251,7 +251,7 @@
            </sizepolicy>
           </property>
           <property name="text">
-           <string>文件载入</string>
+           <string>发送文件</string>
           </property>
          </widget>
         </item>
@@ -519,6 +519,54 @@
     </hint>
    </hints>
   </connection>
+  <connection>
+   <sender>pushButton_4</sender>
+   <signal>pressed()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>slot_input_clear()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>157</x>
+     <y>544</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>149</x>
+     <y>568</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>pushButton_3</sender>
+   <signal>pressed()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>slot_input_from_file()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>77</x>
+     <y>547</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>19</x>
+     <y>572</y>
+    </hint>
+   </hints>
+  </connection>
+  <connection>
+   <sender>checkBox</sender>
+   <signal>stateChanged(int)</signal>
+   <receiver>MainWindow</receiver>
+   <slot>slot_save_view_file_change(int)</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>96</x>
+     <y>234</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>141</x>
+     <y>244</y>
+    </hint>
+   </hints>
+  </connection>
  </connections>
  <slots>
   <slot>slot_proto_change()</slot>
@@ -531,5 +579,8 @@
   <slot>slot_save_view()</slot>
   <slot>slot_host_clear()</slot>
   <slot>slot_hex_send_change(int)</slot>
+  <slot>slot_input_clear()</slot>
+  <slot>slot_input_from_file()</slot>
+  <slot>slot_save_view_file_change(int)</slot>
  </slots>
 </ui>

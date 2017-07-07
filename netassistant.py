@@ -4,6 +4,7 @@ from PyQt5 import QtCore
 from PyQt5 import uic
 import os
 from datetime import datetime
+from binascii import a2b_hex, b2a_hex
 
 from PyQt5.QtNetwork import QTcpSocket, QTcpServer, QUdpSocket, QHostAddress
 import re
@@ -22,7 +23,10 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
     addr_remote = None  # 远程主机地址
     hex_view = False  # 十六进制显示标志
     time_view = False  # 显示接收时间标志
-    net = None  # 当前网络连接 NetHelper类型
+    net = None  # 当前网络连接 NetHelper类
+    hex_send = None  # 十六进制发送标志
+    save_file = None  # 接收转向文件标志
+    save_file_name = None  # 接收转向文件名（全路径）
 
     client_list = []  # 记录所有连接的TCP 客户端
 
@@ -33,6 +37,35 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
         self.comboBox_protocol.addItems(['TCP Client', 'TCP Server', 'UDP'])
         self.comboBox_local.addItems(['127.0.0.1', '0.0.0.0'])
 
+    def __view(self, data, prefix=''):
+        '''显示数据
+        @data:
+            需要显示的原始数据（binary）
+        @prefix:
+            需要显示的前缀（string）
+        '''
+        if self.hex_view:
+            # 转换成十六进制数
+            data = data.toHex()
+        if self.save_file and self.save_file_name:
+            #接收转向文件
+            # with open(self.save_file_name, 'wb') as f:
+            #     f.write(data)
+            pass
+        data = bytearray(data)  # 转成python的bytes类型，方便处理
+        try:
+            s = data.decode('gbk')
+            if self.time_view:
+                # 显示接收时间
+                now = datetime.now()
+                s = '[%s] ' % now.strftime('%Y-%m-%d %H:%M:%S,%f') + s
+
+            if self.hex_view:
+                s = s.upper()
+            self.textBrowser.append(prefix + s)
+        except Exception as e:
+            QMessageBox.critical(self, '错误', '数据编码有误！可尝试十六进制显示。')
+
     def data_recevie(self):
         '''数据接收（TCP Client/UDP）'''
         if self.net:
@@ -42,24 +75,10 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
                     ip = host[0].toString()
                     port = host[1]
                     host = '[From %s:%s] ' % (ip, port)
-                if self.hex_view:
-                    # 转换成十六进制数
-                    data = data.toHex()
-                data = bytearray(data)  # 转成python的bytes类型，方便处理
-                try:
-                    s = data.decode('gbk')
-                    if self.time_view:
-                        # 显示接收时间
-                        now = datetime.now()
-                        s = '[%s] ' % now.strftime('%Y-%m-%d %H:%M:%S,%f') + s
+                else:
+                    host = ''
 
-                    if self.hex_view:
-                        s = s.upper()
-                    if host:
-                        s = host + s
-                    self.textBrowser.append(s)
-                except Exception as e:
-                    QMessageBox.critical(self, '错误', '数据编码有误！可尝试十六进制显示。')
+                self.__view(data, prefix=host)
 
     def slot_proto_change(self, proto):
         '''协议类型更改'''
@@ -154,38 +173,52 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
         else:
             QMessageBox.show(self, 'errr', 'addr=%s not IP ' % addr)
 
+    def __send(self, b):
+        '''发送数据
+        @b:
+            binary数据
+        '''
+        if self.proto == 'UDP':
+            host = self.comboBox_host.currentText()
+            if not host:
+                raise Exception("请输入远程主机地址和端口，例如: 127.0.0.1:2007 。")
+            ip_host, port_host = host.split(':')
+            port_host = int(port_host)
+            self.net.send(b, ip_host=ip_host, port_host=port_host)
+        elif self.proto == 'TCP Server':
+            host = self.comboBox_host.currentText()
+            match_client = True  # 只发送给一个客户端
+            if host == u'所有连接':
+                match_client = False
+            else:
+                ip_host, port_host = host.split(':')
+                port_host = int(port_host)
+            for client in self.client_list:
+                if match_client and client.peerAddress().toString(
+                ) == ip_host and client.peerPort() == port_host:
+                    # 找到对应的client
+                    client.write(b)
+                elif not match_client:
+                    client.write(b)
+        else:
+            self.net.send(b)
+
     def slot_send(self):
         '''发送按钮按下事件'''
         if self.net:
             text = self.textEdit_send.toPlainText()
             if text:
                 try:
-                    b = bytes(text, encoding='utf-8')
-                    if self.proto == 'UDP':
-                        host = self.comboBox_host.currentText()
-                        if not host:
-                            raise Exception(
-                                "请输入远程主机地址和端口，例如: 127.0.0.1:2007 。")
-                        ip_host, port_host = host.split(':')
-                        port_host = int(port_host)
-                        self.net.send(b, ip_host=ip_host, port_host=port_host)
-                    elif self.proto == 'TCP Server':
-                        host = self.comboBox_host.currentText()
-                        match_client = True  # 只发送给一个客户端
-                        if host == u'所有连接':
-                            match_client = False
-                        else:
-                            ip_host, port_host = host.split(':')
-                            port_host = int(port_host)
-                        for client in self.client_list:
-                            if match_client and client.peerAddress().toString(
-                            ) == ip_host and client.peerPort() == port_host:
-                                # 找到对应的client
-                                client.write(b)
-                            elif not match_client:
-                                client.write(b)
+                    if self.hex_send:
+                        text = text.replace(' ', '')  # 删除无效的空格
+                        if len(text) % 2 != 0:
+                            #十六进制发送输入的长度必须是2的倍数
+                            raise Exception('十六进制输入的长度必须是2的倍数')
+                        b = a2b_hex(text)
                     else:
-                        self.net.send(b)
+                        b = bytes(text, encoding='utf-8')
+                    self.__send(b)
+
                 except Exception as e:
                     QMessageBox.critical(self, '错误', '%s' % e)
             else:
@@ -265,24 +298,8 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
                     client_info = '[From %s:%s] ' % (ip, port)
 
                     data = client.readAll()
-                    if self.hex_view:
-                        # 转换成十六进制数
-                        data = data.toHex()
-                    data = bytearray(data)  # 转成python的bytes类型，方便处理
-                    try:
-                        s = data.decode('gbk')
-                        if self.time_view:
-                            # 显示接收时间
-                            now = datetime.now()
-                            s = '[%s] ' % now.strftime(
-                                '%Y-%m-%d %H:%M:%S,%f') + s
 
-                        if self.hex_view:
-                            s = s.upper()
-
-                        self.textBrowser.append(client_info + s)
-                    except Exception as e:
-                        QMessageBox.critical(self, '错误', '数据编码有误！可尝试十六进制显示。')
+                    self.__view(data, prefix=client_info)
 
     def slot_hex_send_change(self, state):
         '''十六进制发送'''
@@ -301,7 +318,37 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
                         port) == c.peerPort:
                     c.close()
         else:
+            self.comboBox_host.clearEditText()
             self.comboBox_host.clear()
+
+    def slot_input_clear(self):
+        '''清除输入'''
+        if self.textEdit_send.toPlainText():
+            self.textEdit_send.clear()
+
+    def slot_input_from_file(self):
+        '''文件发送'''
+
+        # self.file_send=True
+
+        file_name, state = QFileDialog.getOpenFileName(self, u'打开文件', './',
+                                                       u'所有文件(*.*)')
+        if state:
+            with open(file_name, 'rb') as f:
+                b = f.read()
+                self.__send(b)
+
+    def slot_save_view_file_change(self, state):
+        '''接收转向文件'''
+        self.save_file = True if state else False
+        if state:
+            file_name, ok = QFileDialog.getSaveFileName(
+                self, u'保存文件', './', u'所有文件(*.*)')
+            if ok:
+                self.save_file_name = file_name
+        else:
+            self.save_file_name = None
+
 
 class NetHelper(object):
     '''TCP/UDP 统一接口类'''
@@ -363,7 +410,7 @@ class NetHelper(object):
             tuple(data,[from])
         '''
         if self.sock_type == 'TCP Client':
-            data = self.sock.redAll()
+            data = self.sock.readAll()
             return (data, None)
         elif self.sock_type == 'TCP Server':
             pass
