@@ -46,6 +46,9 @@
           <bold>false</bold>
          </font>
         </property>
+        <property name="toolTip">
+         <string>请选择协议类型</string>
+        </property>
         <property name="editable">
          <bool>false</bool>
         </property>
@@ -72,6 +75,9 @@
           <pointsize>12</pointsize>
          </font>
         </property>
+        <property name="toolTip">
+         <string>IP地址</string>
+        </property>
         <property name="editable">
          <bool>true</bool>
         </property>
@@ -86,7 +92,7 @@
          </sizepolicy>
         </property>
         <property name="text">
-         <string>（3）远程主机地址</string>
+         <string>（3）端口号</string>
         </property>
        </widget>
       </item>
@@ -97,6 +103,9 @@
           <family>Arial</family>
           <pointsize>12</pointsize>
          </font>
+        </property>
+        <property name="toolTip">
+         <string>请输入端口号</string>
         </property>
         <property name="editable">
          <bool>true</bool>

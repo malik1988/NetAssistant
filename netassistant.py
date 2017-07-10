@@ -1,13 +1,12 @@
 #coding: utf-8
-from PyQt5.QtWidgets import QMessageBox, QComboBox, QFileDialog
+from PyQt5.QtWidgets import QMessageBox, QComboBox, QFileDialog, QLabel, QPushButton, QSizePolicy, QSpacerItem, QStatusBar
 from PyQt5 import QtCore
 from PyQt5 import uic
 import os
 from datetime import datetime
-from binascii import a2b_hex, b2a_hex
+import binascii
 
 from PyQt5.QtNetwork import QTcpSocket, QTcpServer, QUdpSocket, QHostAddress
-import re
 
 uipath, uiname = os.path.split(os.path.realpath(__file__))
 uiname = uiname.replace('.py', '.ui')
@@ -30,20 +29,72 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
 
     client_list = []  # 记录所有连接的TCP 客户端
 
+    #statusbar上添加的控件
+
+    # 使用字典方式进行管理
+    statusbar_dict = {}
+    rx_count = 0
+    tx_count = 0
+
+    #statusbar End
+
     def __init__(self):
         ui_mainwindow.__init__(self)
         qtbaseclass.__init__(self)
         self.setupUi(self)
         self.comboBox_protocol.addItems(['TCP Client', 'TCP Server', 'UDP'])
         self.comboBox_local.addItems(['127.0.0.1', '0.0.0.0'])
+        self.comboBox_port.addItems(['2000', '2007'])
+        self.setWindowTitle(u'网络调试助手')
+
+        # 给状态栏添加控件
+        self.init_statusbar()
+
+    def init_statusbar(self):
+        # 设置statusbar所有控件自动延伸
+        self.statusbar.setSizePolicy(QSizePolicy.Expanding,
+                                     QSizePolicy.Expanding)
+        # 设置status隐藏控制点（靠齐最右边）
+        self.statusbar.setSizeGripEnabled(False)
+
+        self.statusbar_dict['status'] = QLabel()
+        self.statusbar_dict['status'].setText('状态：Ready')
+        self.statusbar_dict['tx'] = QLabel()
+        # self.statusbar_dict['space']=QSpacerItem(20,20,QSizePolicy.Expanding,QSizePolicy.Expanding)
+        self.statusbar_dict['tx'].setText('发送计数：0')
+        self.statusbar_dict['rx'] = QLabel()
+        self.statusbar_dict['rx'].setText('接收计数：0')
+        self.statusbar_dict['clear'] = QPushButton()
+        self.statusbar_dict['clear'].setText('清除')
+        self.statusbar_dict['clear'].setToolTip('清除发送和接收计数')
+
+        self.statusbar_dict['clear'].pressed.connect(
+            self.statusbar_clear_pressed)
+
+        for i, w in enumerate(self.statusbar_dict.values()):
+            if i != len(self.statusbar_dict) - 1:
+                self.statusbar.addWidget(w, 20)
+            else:
+                # 最后一个控件不拉伸
+                self.statusbar.addWidget(w)
+
+    def statusbar_clear_pressed(self):
+        self.statusbar_dict['tx'].setText('发送计数：0')
+        self.statusbar_dict['rx'].setText('接收计数：0')
+        self.rx_count = 0
+        self.tx_count = 0
 
     def __view(self, data, prefix=''):
         '''显示数据
-        @data:
+        # data:
             需要显示的原始数据（binary）
-        @prefix:
+        # prefix:
             需要显示的前缀（string）
         '''
+
+        self.rx_count += len(data)
+        self.statusbar_dict['rx'].setText('接收计数：%s' % self.rx_count)
+
         if self.hex_view:
             # 转换成十六进制数
             data = data.toHex()
@@ -63,6 +114,7 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
             if self.hex_view:
                 s = s.upper()
             self.textBrowser.append(prefix + s)
+
         except Exception as e:
             QMessageBox.critical(self, '错误', '数据编码有误！可尝试十六进制显示。')
 
@@ -98,13 +150,16 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
         next_state = not self.connected
 
         if next_state:
-            if self.sock_connect():
+            if self.net_connect():
                 self.connected = next_state
                 next_state = not self.connected
+
+                self.statusbar_dict['status'].setText('状态：打开')
         else:
-            if self.sock_disconnect():
+            if self.net_disconnect():
                 self.connected = next_state
                 next_state = not self.connected
+                self.statusbar_dict['status'].setText('状态：关闭')
 
         dict_next = {True: '打开', False: '关闭'}
         self.pushButton_connect.setText(dict_next[next_state])
@@ -113,7 +168,7 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
         self.comboBox_local.setEnabled(next_state)
         self.comboBox_port.setEnabled(next_state)
 
-    def sock_connect(self):
+    def net_connect(self):
         '''连接打开'''
         self.proto = self.comboBox_protocol.currentText()
         ip = self.comboBox_local.currentText()
@@ -142,7 +197,7 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
 
         return self.net != None
 
-    def sock_disconnect(self):
+    def net_disconnect(self):
         '''连接关闭'''
         if self.net:
             try:
@@ -163,28 +218,20 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
                 print(e)
         return self.net == None
 
-    def slot_local_addr_change(self):
-        '''本地主机地址更改'''
-        addr = self.comboBox_local.currentText()
-        if re.match(
-                r'(25[0-5]|2[0-4]\d|[0-1]\d{2}|[1-9]?\d)\.(25[0-5]|2[0-4]\d|[0-1]\d{2}|[1-9]?\d)\.(25[0-5]|2[0-4]\d|[0-1]\d{2}|[1-9]?\d)\.(25[0-5]|2[0-4]\d|[0-1]\d{2}|[1-9]?\d)',
-                addr):
-            self.addr_local = addr
-        else:
-            QMessageBox.show(self, 'errr', 'addr=%s not IP ' % addr)
-
     def __send(self, b):
         '''发送数据
         @b:
             binary数据
         '''
+        ret = 0  # 记录成功发送的字节数
+
         if self.proto == 'UDP':
             host = self.comboBox_host.currentText()
             if not host:
                 raise Exception("请输入远程主机地址和端口，例如: 127.0.0.1:2007 。")
             ip_host, port_host = host.split(':')
             port_host = int(port_host)
-            self.net.send(b, ip_host=ip_host, port_host=port_host)
+            ret = self.net.send(b, ip_host=ip_host, port_host=port_host)
         elif self.proto == 'TCP Server':
             host = self.comboBox_host.currentText()
             match_client = True  # 只发送给一个客户端
@@ -197,11 +244,14 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
                 if match_client and client.peerAddress().toString(
                 ) == ip_host and client.peerPort() == port_host:
                     # 找到对应的client
-                    client.write(b)
+                    ret = client.write(b)
                 elif not match_client:
-                    client.write(b)
+                    ret = client.write(b)
         else:
-            self.net.send(b)
+            ret = self.net.send(b)
+
+        self.tx_count += ret
+        self.statusbar_dict['tx'].setText('发送计数：%s' % self.tx_count)
 
     def slot_send(self):
         '''发送按钮按下事件'''
@@ -214,11 +264,13 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
                         if len(text) % 2 != 0:
                             #十六进制发送输入的长度必须是2的倍数
                             raise Exception('十六进制输入的长度必须是2的倍数')
-                        b = a2b_hex(text)
+                        b = binascii.a2b_hex(text)
                     else:
                         b = bytes(text, encoding='utf-8')
                     self.__send(b)
 
+                except binascii.Error as e:
+                    QMessageBox.critical(self, '错误', '十六进制数中包含非法字符！')
                 except Exception as e:
                     QMessageBox.critical(self, '错误', '%s' % e)
             else:
@@ -258,7 +310,7 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
         client.readyRead.connect(self.tcpServer_dataRecvie)
         # 客户端退出绑定clientExit
         client.disconnected.connect(self.tcpServer_clientExit)
-        client.error.connect(self.tcpServer_clientExit)
+        # client.error.connect(self.tcpServer_clientExit)
 
         self.client_list.append(client)
 
@@ -266,6 +318,8 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
         port = client.peerPort()
         client_info = '%s:%s' % (ip, port)
         self.comboBox_host.addItem(client_info)
+
+        self.statusbar.showMessage('客户端：%s 成功连接！' % client_info, msecs=5000)
 
     def tcpServer_clientExit(self):
         '''TCP Server下客户端退出（正常断开/异常退出）'''
@@ -280,6 +334,8 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
         port = client.peerPort()
         client_info = '%s:%s' % (ip, port)
         self._comboBox_removeItem_byName(self.comboBox_host, client_info)
+
+        self.statusbar.showMessage('客户端：%s 断开连接！' % client_info, msecs=5000)
 
     def _comboBox_removeItem_byName(self, combo, name):
         '''QComboBox中删除特定名字的项目'''
@@ -351,7 +407,12 @@ class NetAssistant(ui_mainwindow, qtbaseclass):
 
 
 class NetHelper(object):
-    '''TCP/UDP 统一接口类'''
+    '''TCP/UDP 统一接口类
+    ## 参数:
+    - sock_type='TCP Client'
+    - ip='127.0.0.1'
+    - port=2007
+    '''
 
     sock = None  # 记录当前连接的sock
     sock_type = None  # 记录当前连接的sock类型
@@ -359,13 +420,12 @@ class NetHelper(object):
     # ip = None # 记录当前连接的IP地址
     port = None  # 记录当前连接的端口号
 
-    def __init__(self, **kwargs):
-        self.open(**kwargs)
-
-    def open(self, sock_type='TCP Client', ip='127.0.0.1', port=2007):
+    def __init__(self, sock_type='TCP Client', ip='127.0.0.1', port=2007):
         '''打开网络设备，建立连接
-        @sock_type:
-            'TCP Client','TCP Server','UDP'
+        ## sock_type:
+           - 'TCP Client'
+           - 'TCP Server'
+           - 'UDP'
         '''
         self.sock_type = sock_type
         # self.ip = ip
