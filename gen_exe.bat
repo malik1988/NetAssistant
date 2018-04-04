@@ -1,1 +1,1 @@
-pyinstaller -F --add-data netassistant.ui;. main.py 
+pyinstaller -F --noconsole --add-data netassistant.ui;. main.py 
