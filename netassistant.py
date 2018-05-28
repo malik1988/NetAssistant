@@ -9,7 +9,7 @@ import binascii
 from PyQt5.QtNetwork import QTcpSocket, QTcpServer, QUdpSocket, QHostAddress
 
 uipath, uiname = os.path.split(os.path.realpath(__file__))
-uiname = uiname.replace('.py', '.ui')
+uiname = uiname.split('.')[0] + '.ui'
 uifile = os.path.join(uipath, uiname)
 ui_mainwindow, qtbaseclass = uic.loadUiType(uifile)
 
